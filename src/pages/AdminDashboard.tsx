@@ -13,8 +13,7 @@ import {
   Sparkles, 
   Trophy, 
   Flame,
-  Tv,
-  Presentation
+  Tv
 } from 'lucide-react';
 
 interface PollStats {
@@ -144,15 +143,17 @@ export const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       
       {/* Top Admin Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm px-4 sm:px-8 py-4">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm px-4 sm:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           
-          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-500 flex items-center justify-center shadow-md shadow-orange-500/20">
-                <Presentation className="w-6 h-6 text-white" />
-              </div>
-              <div>
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                className="h-11 w-auto max-w-[150px] object-contain drop-shadow-sm" 
+              />
+              <div className="border-l border-slate-200 pl-3">
                 <h1 className="text-lg font-black text-slate-900 leading-tight">
                   Panel de Control en Vivo
                 </h1>
@@ -369,13 +370,20 @@ export const AdminDashboard: React.FC = () => {
           
           {/* Modal Header */}
           <div className="w-full max-w-5xl flex items-center justify-between border-b border-slate-200 pb-4">
-            <div className="flex items-center gap-3">
-              <span className="bg-orange-500 text-white font-black text-sm px-3 py-1 rounded-xl">
-                PREGUNTA {modalPoll.id.toUpperCase()}
-              </span>
-              <span className="text-xs text-slate-600 font-bold">
-                {modalPoll.slide_target}
-              </span>
+            <div className="flex items-center gap-4">
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                className="h-10 w-auto object-contain" 
+              />
+              <div className="flex items-center gap-3">
+                <span className="bg-orange-500 text-white font-black text-sm px-3 py-1 rounded-xl">
+                  PREGUNTA {modalPoll.id.toUpperCase()}
+                </span>
+                <span className="text-xs text-slate-600 font-bold">
+                  {modalPoll.slide_target}
+                </span>
+              </div>
             </div>
 
             <button

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Poll } from '../types';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, Send, Vote, RefreshCw, ChevronLeft, Sparkles, BarChart2 } from 'lucide-react';
+import { CheckCircle2, Send, RefreshCw, ChevronLeft, Sparkles, BarChart2 } from 'lucide-react';
 
 export const VotePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -133,12 +133,18 @@ export const VotePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-between p-4 sm:p-6">
       
-      {/* Header */}
+      {/* Header with Logo */}
       <header className="w-full max-w-lg pt-2 pb-4 flex items-center justify-between border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center shadow-md shadow-orange-500/20">
-            <Vote className="w-5 h-5 text-white" />
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Logo" 
+            className="h-10 w-auto max-w-[130px] object-contain drop-shadow-sm" 
+            onError={(e) => {
+              // fallback if logo fails
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
           <div>
             <h1 className="text-base font-extrabold text-slate-900">Encuesta en Vivo</h1>
           </div>
