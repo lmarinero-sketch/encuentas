@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Helper scripts with sensitive API tokens
+setup_db.mjs
+create_tables_api.mjs
+test_supabase.mjs
+test_vote.mjs
+update_polls.mjs
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
