@@ -13,7 +13,8 @@ import {
   Sparkles, 
   Trophy, 
   Flame,
-  Tv
+  Tv,
+  Play
 } from 'lucide-react';
 
 interface PollStats {
@@ -169,6 +170,14 @@ export const AdminDashboard: React.FC = () => {
               <span className="text-xs text-slate-600 font-medium">Total Respuestas:</span>
               <span className="text-base font-black text-slate-900">{totalAllVotes}</span>
             </div>
+
+            <a
+              href="#/"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black transition-all shadow-md shadow-orange-500/20 active:scale-95"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Ver Scrolltelling</span>
+            </a>
 
             <button
               onClick={() => handleClearVotes()}

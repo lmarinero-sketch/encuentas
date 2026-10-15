@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Poll } from '../types';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, Send, RefreshCw, ChevronLeft, Sparkles, BarChart2 } from 'lucide-react';
+import { CheckCircle2, Send, RefreshCw, BarChart2, ShieldCheck, Lock, Smartphone } from 'lucide-react';
 
 export const VotePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,17 +17,51 @@ export const VotePage: React.FC = () => {
   const [totalVotes, setTotalVotes] = useState<number>(0);
 
   const storageKey = `voted_poll_${id}`;
+  const deviceRegistryKey = 'rrhh_device_voted_polls';
 
   useEffect(() => {
     fetchPoll();
     checkIfVoted();
+
+    // Realtime update for total votes
+    if (!id) return;
+    const channel = supabase
+      .channel(`realtime:poll_${id}_votes`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'votes', filter: `question_id=eq.${id}` },
+        () => {
+          setTotalVotes(prev => prev + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const checkIfVoted = () => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      setHasVoted(true);
-      setVotedOptionText(saved);
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        setHasVoted(true);
+        setVotedOptionText(saved);
+        return;
+      }
+
+      // Check secondary registry
+      const registryRaw = localStorage.getItem(deviceRegistryKey);
+      if (registryRaw) {
+        const registry = JSON.parse(registryRaw);
+        if (registry && registry[id]) {
+          setHasVoted(true);
+          setVotedOptionText(registry[id].optionText || 'Voto registrado');
+        }
+      }
+    } catch {
+      // Ignore storage errors
     }
   };
 
@@ -47,7 +81,7 @@ export const VotePage: React.FC = () => {
       if (pollErr) throw pollErr;
       setPoll(pollData);
 
-      // Fetch vote count
+      // Fetch current vote count
       const { count, error: countErr } = await supabase
         .from('votes')
         .select('*', { count: 'exact', head: true })
@@ -65,7 +99,7 @@ export const VotePage: React.FC = () => {
   };
 
   const handleVoteSubmit = async () => {
-    if (selectedIndex === null || !poll) return;
+    if (selectedIndex === null || !poll || hasVoted || submitting) return;
 
     try {
       setSubmitting(true);
@@ -88,7 +122,21 @@ export const VotePage: React.FC = () => {
         origin: { y: 0.6 }
       });
 
-      localStorage.setItem(storageKey, optionText);
+      // Save strictly to device localStorage (ONE VOTE PER DEVICE)
+      try {
+        localStorage.setItem(storageKey, optionText);
+        const registryRaw = localStorage.getItem(deviceRegistryKey);
+        const registry = registryRaw ? JSON.parse(registryRaw) : {};
+        registry[poll.id] = {
+          optionIndex: selectedIndex,
+          optionText: optionText,
+          votedAt: new Date().toISOString()
+        };
+        localStorage.setItem(deviceRegistryKey, JSON.stringify(registry));
+      } catch (storageErr) {
+        console.warn('Storage save warning:', storageErr);
+      }
+
       setHasVoted(true);
       setVotedOptionText(optionText);
       setTotalVotes(prev => prev + 1);
@@ -101,73 +149,60 @@ export const VotePage: React.FC = () => {
     }
   };
 
-  const handleResetVote = () => {
-    localStorage.removeItem(storageKey);
-    setHasVoted(false);
-    setSelectedIndex(null);
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#050813] text-white flex flex-col items-center justify-center p-6 text-center font-['Montserrat',sans-serif]">
         <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-600 font-medium animate-pulse">Cargando encuesta...</p>
+        <p className="text-slate-400 font-medium animate-pulse text-sm">Cargando encuesta...</p>
       </div>
     );
   }
 
   if (error || !poll) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl max-w-md shadow-sm">
-          <h2 className="text-xl font-bold mb-2">Encuesta no encontrada</h2>
-          <p className="text-sm mb-6">{error || 'La pregunta solicitada no existe o no está disponible.'}</p>
-          <Link to="/" className="inline-flex items-center gap-2 bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all">
-            <ChevronLeft className="w-4 h-4" /> Volver al Inicio
-          </Link>
+      <div className="min-h-screen bg-[#050813] text-white flex flex-col items-center justify-center p-6 text-center font-['Montserrat',sans-serif]">
+        <div className="bg-red-500/10 border border-red-500/30 text-red-200 p-8 rounded-3xl max-w-md shadow-2xl">
+          <h2 className="text-xl font-bold mb-2 text-white">Pregunta no disponible</h2>
+          <p className="text-sm text-slate-300 mb-6">{error || 'La pregunta solicitada no existe o no está activa.'}</p>
+          <span className="text-xs text-orange-400 font-mono">ID: {id}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-between p-4 sm:p-6">
+    <div className="min-h-screen bg-[#050813] text-slate-100 flex flex-col items-center justify-between p-4 sm:p-6 font-['Montserrat',sans-serif] selection:bg-orange-500 selection:text-white">
       
-      {/* Header with Logo */}
-      <header className="w-full max-w-lg pt-2 pb-4 flex items-center justify-between border-b border-slate-200">
+      {/* Top Header */}
+      <header className="w-full max-w-lg pt-2 pb-4 flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-3">
-          <img 
-            src="/logo.png" 
-            alt="Logo" 
-            className="h-10 w-auto max-w-[130px] object-contain drop-shadow-sm" 
-            onError={(e) => {
-              // fallback if logo fails
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
+          <div className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-black text-sm shadow-inner">
+            LM
+          </div>
           <div>
-            <h1 className="text-base font-extrabold text-slate-900">Encuesta en Vivo</h1>
+            <h1 className="text-sm font-extrabold text-white tracking-wide">Votación en Vivo</h1>
+            <p className="text-[11px] text-slate-400">Panel de Audiencia</p>
           </div>
         </div>
 
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-orange-500/10 text-orange-600 border border-orange-200">
-          Pregunta {poll.id.toUpperCase()}
-        </span>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30 text-xs font-bold">
+          <Smartphone className="w-3.5 h-3.5" />
+          <span>{poll.id.toUpperCase()}</span>
+        </div>
       </header>
 
       {/* Main Content Card */}
       <main className="w-full max-w-lg my-auto py-6">
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 relative overflow-hidden">
+        <div className="backdrop-blur-2xl bg-[#090e1c]/95 rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/10 relative overflow-hidden">
           
-          {/* Top orange accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-2 bg-orange-500"></div>
+          {/* Top orange accent line */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500"></div>
 
           <div className="mb-6 pt-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-              <span>{poll.slide_target}</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+            <span className="text-[11px] font-black tracking-widest text-orange-400 uppercase block mb-2">
+              {poll.slide_target}
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
               {poll.title}
             </h2>
           </div>
@@ -175,8 +210,8 @@ export const VotePage: React.FC = () => {
           {!hasVoted ? (
             /* Voting Options State */
             <div className="space-y-3">
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2">
-                Selecciona tu respuesta:
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">
+                Selecciona una opción:
               </p>
 
               {poll.options.map((option, idx) => {
@@ -186,15 +221,15 @@ export const VotePage: React.FC = () => {
                     key={idx}
                     type="button"
                     onClick={() => setSelectedIndex(idx)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group ${
+                    className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group cursor-pointer ${
                       isSelected
-                        ? 'bg-orange-50 border-2 border-orange-500 text-slate-900 font-bold shadow-md shadow-orange-500/10'
-                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800 font-medium'
+                        ? 'bg-orange-500/20 border-2 border-orange-500 text-white font-bold shadow-lg shadow-orange-500/20'
+                        : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200 font-medium'
                     }`}
                   >
-                    <span className="text-sm sm:text-base leading-snug">{option}</span>
+                    <span className="text-sm sm:text-base leading-snug pr-3">{option}</span>
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-                      isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 group-hover:border-slate-400'
+                      isSelected ? 'border-orange-500 bg-orange-500' : 'border-white/30 group-hover:border-white/60'
                     }`}>
                       {isSelected && <div className="w-2 h-2 rounded-full bg-white"></div>}
                     </div>
@@ -206,7 +241,7 @@ export const VotePage: React.FC = () => {
                 type="button"
                 disabled={selectedIndex === null || submitting}
                 onClick={handleVoteSubmit}
-                className="w-full mt-6 py-4 px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                className="w-full mt-6 py-4 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base shadow-xl shadow-orange-500/25 flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] cursor-pointer"
               >
                 {submitting ? (
                   <>
@@ -220,35 +255,40 @@ export const VotePage: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 text-center mt-3 pt-2">
+                <Lock className="w-3 h-3 text-orange-400" />
+                <span>Solo se permite una respuesta por dispositivo.</span>
+              </div>
             </div>
           ) : (
-            /* Voted Confirmation State */
+            /* Voted Confirmation State (STRICTLY LOCKED - NO RE-VOTING) */
             <div className="text-center py-6">
-              <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600 shadow-md">
+              <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/40 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-400 shadow-xl shadow-emerald-500/20">
                 <CheckCircle2 className="w-9 h-9" />
               </div>
-              <h3 className="text-2xl font-extrabold text-slate-900 mb-2">¡Voto Registrado!</h3>
-              <p className="text-sm text-slate-600 mb-6">
-                Tu respuesta se ha enviado correctamente al panel de la presentación.
+              <h3 className="text-2xl font-black text-white mb-2">¡Voto Registrado con Éxito!</h3>
+              <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+                Tu respuesta ya fue contabilizada en tiempo real en la pantalla del expositor.
               </p>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 text-left">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Tu selección:</span>
-                <p className="text-sm font-extrabold text-slate-900">{votedOptionText}</p>
+              <div className="bg-black/40 border border-orange-500/30 rounded-2xl p-4 mb-6 text-left relative overflow-hidden">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                  <span className="text-[11px] font-black text-orange-400 uppercase tracking-wider block">Tu respuesta seleccionada:</span>
+                </div>
+                <p className="text-base font-extrabold text-white pl-4">{votedOptionText}</p>
               </div>
 
-              <div className="flex items-center justify-center gap-2 text-xs text-slate-600 bg-slate-100 py-2.5 px-4 rounded-xl border border-slate-200 mb-4">
-                <BarChart2 className="w-4 h-4 text-orange-500" />
-                <span>Total respuestas registradas: <strong className="text-slate-900">{totalVotes}</strong></span>
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-300 bg-white/5 py-3 px-4 rounded-xl border border-white/10 mb-5">
+                <BarChart2 className="w-4 h-4 text-orange-400" />
+                <span>Total de respuestas en la sala: <strong className="text-white font-mono">{totalVotes}</strong></span>
               </div>
 
-              <button
-                type="button"
-                onClick={handleResetVote}
-                className="text-xs text-slate-500 hover:text-orange-600 underline font-semibold transition-colors"
-              >
-                ¿Quieres cambiar tu respuesta?
-              </button>
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 bg-black/30 py-2.5 px-4 rounded-xl border border-white/5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Respuesta única por dispositivo confirmada</span>
+              </div>
             </div>
           )}
 
@@ -256,8 +296,8 @@ export const VotePage: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-lg text-center py-3 text-xs text-slate-500 border-t border-slate-200">
-        <p>Presentado por <strong>Lucas Marinero</strong></p>
+      <footer className="w-full max-w-lg text-center py-3 text-xs text-slate-500 border-t border-white/10">
+        <p>Conferencia Magistral • <strong>Lucas Marinero</strong></p>
       </footer>
 
     </div>
